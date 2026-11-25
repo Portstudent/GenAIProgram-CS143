@@ -22,3 +22,4 @@ The snake game should take place in a rectangle whose ends are solid (meaning th
 
 ### Reflection
 
+Coding with generative AI was extremely easy and very fast. Claude was able to produce roughly 20 java files in about three minutes that allowed me to have a snake game. The speed and scale of this is a huge benefit that can't be understated. The main drawback is that I really have no clue how this program works. So many random things have been imported and its difficult to trace anything because of how many files there are. I think that although creating this program solo would have taken way longer, it would've allowed for more creative precision on how the snake or fruits looked. This program doesn't feel like mine in any way. I cannot believe Claude had this much precision across so many different files.
