@@ -20,8 +20,14 @@ public class Mango extends GamePiece {
         int fruitX = x + (cellSize - fruitSize) / 2;
         int fruitY = y + cellSize - fruitSize - Math.max(1, cellSize / 16);
 
-        g.setColor(MANGO_ORANGE);
+        g.setPaint(new java.awt.GradientPaint(fruitX, fruitY, new Color(255, 218, 75),
+                fruitX + fruitSize, fruitY + fruitSize, new Color(225, 85, 12)));
         g.fillOval(fruitX, fruitY, fruitSize, fruitSize);
+        g.setColor(new Color(255, 245, 180, 180));
+        g.fillOval(fruitX + fruitSize / 5, fruitY + fruitSize / 6,
+                Math.max(1, fruitSize / 5), Math.max(1, fruitSize / 3));
+        g.setColor(new Color(115, 75, 30));
+        g.drawLine(x + cellSize / 2, fruitY + 2, x + cellSize / 2, fruitY - 2);
 
         // The green leaf is a small tilted oval at the top of the fruit.
         int leafWidth = Math.max(4, cellSize / 3);

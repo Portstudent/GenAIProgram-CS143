@@ -41,9 +41,13 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener {
     private final GameSettings settings;
     private final Map<Integer, Direction> keyBindings;
     private final Timer timer;
+    private final Timer spawnTimer;
 
     private Game game;
     private long gameOverTime;
+    private long explosionStart;
+    private int explosionRow, explosionCol;
+    private static final long EXPLOSION_NS = 450_000_000L;
 
     public GamePanel(GameSettings settings) {
         this.settings = settings;
@@ -66,6 +70,12 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener {
         game = createGame();
         timer = new Timer(settings.getMoveDelayMs(), this);
         timer.start();
+        // Check spawn deadlines separately from the movement timer.
+        spawnTimer = new Timer(20, e -> {
+            game.placeSpecialItems();
+            repaint();
+        });
+        spawnTimer.start();
     }
 
     private Game createGame() {
@@ -73,9 +83,11 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener {
     }
 
     private void restart() {
+        explosionStart = 0;
         game = createGame();
         timer.setDelay(settings.getMoveDelayMs());
         timer.start();
+        spawnTimer.start();
         repaint();
     }
 
@@ -84,10 +96,18 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener {
     @Override
     public void actionPerformed(ActionEvent e) {
         GameState before = game.getState();
+        // Let the impact finish before removing the tail.
+        if (before == GameState.DYING && explosionStart != 0
+                && System.nanoTime() - explosionStart < EXPLOSION_NS) return;
         game.update();
         GameState after = game.getState();
 
         if (before == GameState.PLAYING && after == GameState.DYING) {
+            if (game.isCollisionDeath()) {
+                explosionRow = game.getSnake().getHead().getRow();
+                explosionCol = game.getSnake().getHead().getCol();
+                explosionStart = System.nanoTime();
+            }
             // Make the disappearing animation take about 1.5 seconds no matter how long the snake is.
             int delay = 1500 / Math.max(1, game.getSnake().size());
             timer.setDelay(Math.max(15, Math.min(100, delay)));
@@ -95,6 +115,7 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener {
         if (after == GameState.GAME_OVER) {
             gameOverTime = System.currentTimeMillis();
             timer.stop();
+            spawnTimer.stop();
         }
         repaint();
     }
@@ -168,10 +189,14 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener {
             mango.draw(g2, boardX + mango.getCol() * cell, boardY + mango.getRow() * cell, cell);
         }
 
-        // Snake (for-each works because NodeList implements Iterable)
-        for (SnakeSegment segment : game.getSnake().getSegments()) {
-            segment.draw(g2, boardX + segment.getCol() * cell, boardY + segment.getRow() * cell, cell);
-        }
+        SuperMango superMango = game.getSuperMango();
+        if (superMango != null && game.isSuperMangoVisible()) superMango.draw(g2, boardX + superMango.getCol() * cell,
+                boardY + superMango.getRow() * cell, cell);
+        Scissors scissors = game.getScissors();
+        if (scissors != null && game.isScissorsVisible()) scissors.draw(g2, boardX + scissors.getCol() * cell,
+                boardY + scissors.getRow() * cell, cell);
+        SnakeRenderer.draw(g2, game.getSnake(), boardX, boardY, cell);
+        drawExplosion(g2, boardX, boardY, cell, boardWidth, boardHeight);
 
         if (game.getState() == GameState.READY) {
             g2.setColor(Color.DARK_GRAY);
@@ -182,6 +207,35 @@ public class GamePanel extends JPanel implements ActionListener, KeyListener {
         if (game.getState() == GameState.GAME_OVER) {
             drawGameOverScreen(g2);
         }
+    }
+
+    /** A short radial burst, strictly confined to one cell radius from the head. */
+    private void drawExplosion(Graphics2D g2, int boardX, int boardY,
+            int cell, int boardWidth, int boardHeight) {
+        if (explosionStart == 0) return;
+        double t = (System.nanoTime() - explosionStart) / (double) EXPLOSION_NS;
+        if (t < 0 || t >= 1) return;
+        double x = boardX + (explosionCol + 0.5) * cell;
+        double y = boardY + (explosionRow + 0.5) * cell;
+        Graphics2D burst = (Graphics2D) g2.create();
+        burst.clipRect(boardX, boardY, boardWidth, boardHeight);
+        burst.clip(new java.awt.geom.Ellipse2D.Double(x-cell, y-cell, 2*cell, 2*cell));
+        burst.setComposite(java.awt.AlphaComposite.SrcOver.derive((float)(1-t)));
+        double core = cell * (0.12 + 0.35 * (1-t));
+        burst.setColor(new Color(255, 185, 35));
+        burst.fill(new java.awt.geom.Ellipse2D.Double(x-core,y-core,2*core,2*core));
+        burst.setColor(new Color(255, 245, 170));
+        burst.fill(new java.awt.geom.Ellipse2D.Double(x-core/2,y-core/2,core,core));
+        for (int i = 0; i < 12; i++) {
+            double angle = i * Math.PI / 6;
+            double distance = cell * (0.15 + 0.70*t) * (i%2 == 0 ? 1 : 0.75);
+            double r = cell * (0.13 - 0.07*t);
+            double px = x + Math.cos(angle)*distance;
+            double py = y + Math.sin(angle)*distance;
+            burst.setColor(i%2 == 0 ? new Color(255, 90, 20) : new Color(255, 210, 55));
+            burst.fill(new java.awt.geom.Ellipse2D.Double(px-r,py-r,2*r,2*r));
+        }
+        burst.dispose();
     }
 
     private void drawGameOverScreen(Graphics2D g2) {
